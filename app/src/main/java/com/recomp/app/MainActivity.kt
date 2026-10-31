@@ -409,6 +409,15 @@ private fun SettingsScreen(
     var sex by remember(profile) { mutableStateOf(profile.formula) }
     var activity by remember(profile) { mutableStateOf(profile.activity) }
     var objective by remember(profile) { mutableStateOf(profile.objective) }
+    val updated = profile.copy(
+        age = age.toIntOrNull() ?: profile.age,
+        heightCm = height.toIntOrNull() ?: profile.heightCm,
+        initialWeightKg = startWeight.parseDecimal() ?: profile.initialWeightKg,
+        goalWeightKg = goalWeight.parseDecimal() ?: profile.goalWeightKg,
+        formula = sex,
+        activity = activity,
+        objective = objective
+    )
     SectionTitle(
         if (isFirstLaunch) "Crea tu perfil" else "Ajustes",
         if (isFirstLaunch) "Personaliza Recomp antes de empezar. No usamos datos de ejemplo." else "Configura los datos de tu plan"
@@ -443,15 +452,6 @@ private fun SettingsScreen(
             FilterChip(selected = objective == "mantener", onClick = { objective = "mantener" }, label = { Text("Mantener") })
             FilterChip(selected = objective == "ganar_musculo", onClick = { objective = "ganar_musculo" }, label = { Text("Ganar músculo") })
         }
-        val updated = profile.copy(
-            age = age.toIntOrNull() ?: profile.age,
-            heightCm = height.toIntOrNull() ?: profile.heightCm,
-            initialWeightKg = startWeight.parseDecimal() ?: profile.initialWeightKg,
-            goalWeightKg = goalWeight.parseDecimal() ?: profile.goalWeightKg,
-            formula = sex,
-            activity = activity,
-            objective = objective
-        )
         val parsedAge = age.toIntOrNull()
         val parsedHeight = height.toIntOrNull()
         val valid = parsedAge != null && parsedAge in 18..100 &&
