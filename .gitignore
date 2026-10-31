@@ -1,0 +1,19 @@
+# Android / IDE
+.gradle/
+.idea/
+**/build/
+local.properties
+*.iml
+.cxx/
+.externalNativeBuild/
+captures/
+# Datos personales; no publicar
+*.db
+*.db-shm
+*.db-wal
+*respaldo*.json
+backup-*.json
+*.keystore
+*.jks
+# Generated
+.DS_Store
