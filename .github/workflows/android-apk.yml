@@ -40,8 +40,8 @@ jobs:
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Instalar plataforma Android API 37
-        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - name: Instalar plataforma Android API 37.0
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
 
       - name: Compilar APK de depuración
         run: gradle --no-daemon --stacktrace :app:assembleDebug
