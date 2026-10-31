@@ -1,70 +1,88 @@
 # Recomp · Android
 
-Aplicación Android **offline-first** para registrar alimentación, entrenamientos y cambios corporales. Orientada al **público adulto en general**, no a un perfil personal predefinido. Construida con **Kotlin**, **Jetpack Compose**, **Room** y **DataStore**.
+Aplicación **offline-first** para alimentación, entrenamiento, medidas y progreso físico, destinada al público adulto en general. Creada en **Kotlin**, **Jetpack Compose**, **Room** y **DataStore**.
 
-> **Estado:** prototipo v0.1.0 en desarrollo. Las compilaciones automatizadas publican APK de **depuración** como versiones preliminares (*pre-releases*), no APK oficiales de producción.
+> **Estado:** versión experimental. La comprobación de actualizaciones y la instalación desde GitHub Releases están implementadas en el código fuente, pero publicar versiones actualizables exige configurar una firma permanente. Las versiones previas `debug-build-*` no son compatibles para actualización directa.
 
-## 📲 Descargar la aplicación
+## 📲 Descarga e instalación
 
-**[Ir a GitHub Releases](https://github.com/JEstrada2007/recomp-android/releases)**
+[Ver versiones en GitHub Releases](https://github.com/JEstrada2007/recomp-android/releases)
 
-1. Abre la versión preliminar más reciente que tenga el archivo adjunto.
-2. En **Assets**, descarga **`Recomp-debug.apk`**.
-3. Instálalo en Android 8.0 (API 26) o superior, habilitando la instalación desde esa fuente si tu teléfono lo solicita.
+Instala únicamente una versión firmada con etiqueta `v0.2.N` y el archivo **`Recomp.apk`**. Las compilaciones `debug-build-*` son pruebas anteriores que **no pueden actualizarse encima conservando los datos** por utilizar certificados de firma distintos. Si no aparece `Recomp.apk`, todavía no se ha publicado una versión apta para actualizarse.
 
-**Importante:** las compilaciones debug de distintas ejecuciones pueden usar firmas diferentes. Puede ser necesario desinstalar una versión anterior para instalar la siguiente, lo que **borra los datos locales**. La importación de respaldos todavía no está implementada. No uses estas compilaciones para datos que no puedas permitirte perder.
+La aplicación funciona en Android 8.0 o posterior.
 
-Si aún no aparece ningún APK en Releases, consulta [el estado del compilador](https://github.com/JEstrada2007/recomp-android/actions/workflows/android-apk.yml). **No se publica ninguna versión cuando la compilación falla**.
+## 🔄 Actualizaciones desde la app
 
-## ⚙️ Compilación automática
+- Recomp consulta las Releases firmadas **al abrirse** cuando hay conexión; no requiere abrir GitHub para comprobar versiones.
+- Al detectar una versión cuyo `versionCode` es superior, muestra **Actualización disponible**.
+- Con autorización de la persona usuaria, descarga el APK de la Release oficial y **verifica su SHA-256** frente al hash de los metadatos publicados.
+- Abre el **instalador de Android**, que puede pedir permitir instalaciones desde esta fuente y confirmar la actualización.
+- En **Ajustes → Actualizaciones** se puede comprobar manualmente si hay novedades o reintentar una instalación.
 
-El archivo [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml) ejecuta GitHub Actions:
+**No existe instalación silenciosa** ni comprobación periódica con la app cerrada en esta versión. Android exige que la aplicación tenga el mismo identificador, la misma firma digital y un código de versión compatible para conservar los datos. Cambiar de una APK debug a una APK firmada requiere normalmente una reinstalación. El usuario debe respaldar sus registros antes; la **importación JSON todavía no está implementada**, así que no se promete una restauración automática.
 
-- **Push a `main`**: compila y, si termina correctamente, crea una versión preliminar con etiqueta `debug-build-N` y adjunta `Recomp-debug.apk` en **Releases**.
-- **Pull request hacia `main`**: verifica la compilación, pero **no publica una versión**.
-- **Ejecución manual**: abre [Actions → Compilar APK Android](https://github.com/JEstrada2007/recomp-android/actions/workflows/android-apk.yml), elige **Run workflow** sobre `main`.
+## 🔐 Configuración única de firma para el propietario
 
-El proceso usa **Java 17**, **Gradle 9.3.1**, **AGP 9.1.1** y **Android SDK API 37.0**. El APK se genera con `gradle --no-daemon --stacktrace :app:assembleDebug`. GitHub Actions usa el `GITHUB_TOKEN` del repositorio para publicar en Releases, sin que tengas que añadir un token manual.
+Las actualizaciones posteriores podrán instalarse encima de la versión anterior **solo si todas las Releases usan la misma clave privada**. Por seguridad, la clave **nunca debe añadirse al repositorio**.
 
-## Funciones actuales
+En un equipo con JDK, genera una clave duradera:
 
-- Pantallas de **Inicio**, **Comidas**, **Entrenar**, **Progreso** y **Ajustes**.
-- Configuración inicial individual: edad, estatura, peso inicial, meta de peso, actividad, objetivo y variante de ecuación metabólica.
-- Objetivos: perder grasa, recomposición corporal, mantenimiento o ganar músculo.
-- Registro local de peso, cintura, alimentos, calorías, proteínas y entrenamientos.
-- Gráfica sencilla de peso y exportación manual de registros a JSON.
-- Estimación energética orientativa por Mifflin–St Jeor y nivel de actividad; no equivale a una prescripción médica.
-- Tema oscuro morado, sin cuentas, anuncios ni acceso obligatorio a internet.
+```bash
+keytool -genkeypair -v -keystore recomp-release.jks -alias recomp -keyalg RSA -keysize 3072 -validity 10000
+```
+
+Conserva el archivo `recomp-release.jks` y las contraseñas en un lugar seguro y con respaldo. Convierte el archivo a Base64, por ejemplo con PowerShell en Windows:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("recomp-release.jks")) | Set-Clipboard
+```
+
+En **[Settings → Secrets and variables → Actions](https://github.com/JEstrada2007/recomp-android/settings/secrets/actions)** crea cuatro *repository secrets*:
+
+| Nombre del secret | Valor |
+|---|---|
+| `RECOMP_KEYSTORE_BASE64` | Contenido Base64 del archivo JKS |
+| `RECOMP_KEYSTORE_PASSWORD` | Contraseña del almacén |
+| `RECOMP_KEY_ALIAS` | Alias utilizado al crear la clave (ej. `recomp`) |
+| `RECOMP_KEY_PASSWORD` | Contraseña privada de esa clave |
+
+La clave privada debe permanecer bajo control del propietario. Si se pierde, las nuevas APK podrían no poder actualizar las existentes. **No introduzcas ninguna contraseña ni el Base64 en issues, commits, logs, mensajes públicos ni en el README.**
+
+## ⚙️ Compilador de GitHub Actions
+
+[Ver compilaciones](https://github.com/JEstrada2007/recomp-android/actions/workflows/android-apk.yml)
+
+El flujo `android-apk.yml` funciona en cada `push` a `main`, en pull requests y manualmente:
+
+1. Configura JDK 17, Gradle 9.3.1 y Android SDK 37.0.
+2. Ejecuta `gradle :app:assembleDebug` como comprobación de compilación.
+3. **Solo en `main`, si están configurados los cuatro secrets**, ejecuta `assembleRelease` con versión `0.2.N` y `versionCode=N`, firma el APK y comprueba su existencia.
+4. Crea una *pre-release* `v0.2.N` que contiene **`Recomp.apk`** y publica su SHA-256 y código de versión en el cuerpo de la Release.
+
+Si falta cualquiera de los secrets, **no se publica una APK sin firma estable**. En GitHub Actions aparecerá un aviso indicando que falta completar la configuración. El flujo no crea un nuevo certificado en cada ejecución.
+
+## Funcionalidades
+
+- Configuración inicial por usuario: edad, estatura, peso, actividad, objetivo y variante de fórmula metabólica.
+- Registro de comidas, calorías, proteínas, entrenamiento, peso y cintura en almacenamiento local.
+- Gráfica básica de evolución y exportación JSON.
+- Estimación energética orientativa para objetivos de pérdida de grasa, recomposición, mantenimiento y ganancia muscular.
+- Tema oscuro morado, sin cuentas obligatorias y sin análisis externos.
+- Comprobación de actualizaciones desde GitHub Releases.
 
 ## Desarrollo local
 
-1. Clona el repositorio: `git clone https://github.com/JEstrada2007/recomp-android.git`.
-2. Ábrelo en Android Studio compatible con **AGP 9.1.1** y **JDK 17**.
-3. Configura **Gradle 9.3.1** y **Android SDK API 37.0**.
-4. Ejecuta `gradle :app:assembleDebug`. El APK estará en `app/build/outputs/apk/debug/app-debug.apk`.
-
-> Actualmente falta incluir el binario `gradle-wrapper.jar` en el repositorio, por lo que no se debe asumir que `./gradlew` funcione. GitHub Actions instala Gradle explícitamente.
-
-### Estructura
-
-```text
-app/src/main/java/com/recomp/app/
-  MainActivity.kt        # Pantallas y formularios Compose
-  data/
-    RecompDatabase.kt    # Persistencia Room
-    ProfileStore.kt      # Preferencias de usuario y estimaciones
-  ui/
-    RecompTheme.kt       # Tema visual
-.github/workflows/
-  android-apk.yml        # Compilación y publicación automática
+```sh
+git clone https://github.com/JEstrada2007/recomp-android.git
+cd recomp-android
+gradle :app:assembleDebug
 ```
+
+Requiere Android Studio y Gradle compatible con AGP 9.1.1, JDK 17 y Android SDK API 37.0. El repositorio todavía no incluye `gradle-wrapper.jar`, por lo que GitHub Actions utiliza Gradle 9.3.1 instalado explícitamente.
 
 ## Privacidad y limitaciones
 
-Los registros se guardan en el dispositivo, salvo exportación manual. Este repositorio es **público**, pero **no contiene un perfil personal precargado**. No subas bases de datos, respaldos con datos reales o claves privadas.
+La base de datos Room y las preferencias DataStore permanecen en el dispositivo salvo exportación manual. El código es público, pero no debe incluir datos personales ni claves privadas de publicación. **Recomp no reemplaza la atención de un profesional de salud** y sus cálculos son aproximaciones.
 
-El software es experimental y está orientado actualmente a adultos. No reemplaza la atención profesional de salud; sus cálculos son aproximaciones generales.
-
-**Pendiente:** verificar pruebas funcionales, implementar importación de respaldos, mejorar accesibilidad, personalizar entrenamientos, preparar firma estable para actualizaciones y añadir pruebas automatizadas.
-
-La elección de licencia y una eventual publicación de producción quedan pendientes.
+Pendiente: pruebas en dispositivos físicos, importación de respaldos, rutinas más completas, pruebas automatizadas, accesibilidad y preparación para distribución de producción.
