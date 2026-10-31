@@ -1,6 +1,9 @@
 package com.recomp.app
 
 import android.os.Bundle
+import java.io.File
+import com.recomp.app.update.AvailableUpdate
+import com.recomp.app.update.UpdateManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -66,6 +69,46 @@ class MainActivity : ComponentActivity() {
                 var weightDialog by remember { mutableStateOf(false) }
                 var mealDialog by remember { mutableStateOf(false) }
                 var workoutDialog by remember { mutableStateOf(false) }
+                var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
+                var updateDialog by remember { mutableStateOf(false) }
+                var updateBusy by remember { mutableStateOf(false) }
+                var updateMessage by remember { mutableStateOf("") }
+                var updateProgress by remember { mutableIntStateOf(0) }
+                var downloadedApk by remember { mutableStateOf<File?>(null) }
+
+                val checkUpdates: (Boolean) -> Unit = { interactive ->
+                    scope.launch {
+                        if (BuildConfig.DEBUG) {
+                            if (interactive) updateMessage = "Esta compilación de desarrollo no se puede actualizar en sitio. Instala una versión firmada desde Releases."
+                        } else {
+                            updateBusy = true
+                            try {
+                                val candidate = UpdateManager.check()
+                                availableUpdate = candidate
+                                if (candidate != null) {
+                                    updateDialog = true
+                                } else if (interactive) {
+                                    updateMessage = "Ya tienes la versión más reciente."
+                                }
+                            } catch (e: Exception) {
+                                if (interactive) updateMessage = "No se pudo comprobar la versión: " + (e.message ?: "Error de red")
+                            } finally {
+                                updateBusy = false
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) { checkUpdates(false) }
+
+                val installDownloaded: () -> Unit = {
+                    downloadedApk?.let { apk ->
+                        runCatching { UpdateManager.install(this@MainActivity, apk) }
+                            .onSuccess { started ->
+                                if (!started) updateMessage = "Autoriza instalar apps desde Recomp y pulsa Instalar APK descargado."
+                            }
+                            .onFailure { updateMessage = "No se pudo abrir el instalador: " + (it.message ?: "Error") }
+                    }
+                }
 
                 var exportSnapshot by remember { mutableStateOf("") }
                 val exporter = rememberLauncherForActivityResult(
@@ -119,7 +162,7 @@ class MainActivity : ComponentActivity() {
                                 Text("Tu progreso, a tu ritmo", color = TextMuted, fontSize = 12.sp)
                             }
                             Surface(color = Secondary, shape = RoundedCornerShape(16.dp)) {
-                                Text("v0.1", modifier = Modifier.padding(10.dp), color = Color.White, fontSize = 12.sp)
+                                Text("v" + BuildConfig.VERSION_NAME, modifier = Modifier.padding(10.dp), color = Color.White, fontSize = 12.sp)
                             }
                         }
                         if (!profile.isConfigured) {
@@ -151,10 +194,48 @@ class MainActivity : ComponentActivity() {
                                 onExport = {
                                     exportSnapshot = makeJson(profile, weights, meals, workouts)
                                     exporter.launch("recomp-respaldo-$today.json")
-                                })
+                                },
+                                updateMessage = updateMessage,
+                                updateBusy = updateBusy,
+                                downloadedUpdateReady = downloadedApk != null,
+                                onCheckUpdates = { checkUpdates(true) },
+                                onInstallDownloaded = installDownloaded
+                            )
                         }
                         Spacer(Modifier.height(10.dp))
                     }
+                }
+                if (updateDialog && availableUpdate != null) {
+                    val candidate = availableUpdate!!
+                    AlertDialog(
+                        onDismissRequest = { updateDialog = false },
+                        title = { Text("Actualización disponible") },
+                        text = { Text("Recomp " + candidate.versionName + " está disponible. ¿Descargarla desde GitHub Releases e instalarla? Android solicitará tu confirmación.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                updateDialog = false
+                                scope.launch {
+                                    updateBusy = true
+                                    updateMessage = "Descargando actualización..."
+                                    updateProgress = 0
+                                    try {
+                                        downloadedApk = UpdateManager.download(
+                                            this@MainActivity, candidate
+                                        ) { progress -> updateProgress = progress }
+                                        updateMessage = "Descarga verificada. Abriendo instalador..."
+                                        installDownloaded()
+                                    } catch (e: Exception) {
+                                        updateMessage = "No se pudo actualizar: " + (e.message ?: "Error de red")
+                                    } finally {
+                                        updateBusy = false
+                                    }
+                                }
+                            }) { Text("Descargar e instalar") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { updateDialog = false }) { Text("Más tarde") }
+                        }
+                    )
                 }
                 if (weightDialog) WeightDialog(onDismiss = { weightDialog = false }) { kg, waist ->
                     scope.launch { dao.insertWeight(WeightEntry(date = today, weightKg = kg, waistCm = waist)) }
@@ -400,7 +481,12 @@ private fun SettingsScreen(
     profile: UserProfile,
     onSave: (UserProfile) -> Unit,
     onExport: () -> Unit,
-    isFirstLaunch: Boolean = false
+    isFirstLaunch: Boolean = false,
+    updateMessage: String = "",
+    updateBusy: Boolean = false,
+    downloadedUpdateReady: Boolean = false,
+    onCheckUpdates: () -> Unit = {},
+    onInstallDownloaded: () -> Unit = {}
 ) {
     var age by remember(profile) { mutableStateOf(profile.age.takeIf { it > 0 }?.toString() ?: "") }
     var height by remember(profile) { mutableStateOf(profile.heightCm.takeIf { it > 0 }?.toString() ?: "") }
@@ -471,6 +557,29 @@ private fun SettingsScreen(
             Text("$target kcal/día", color = Purple, fontWeight = FontWeight.Bold, fontSize = 30.sp)
             Text("Estimación según actividad y objetivo elegido; no es una prescripción. No se ajusta automáticamente.", fontSize = 12.sp, color = TextMuted)
         }
+    }
+    if (!isFirstLaunch) Panel {
+        Text("Actualizaciones", fontWeight = FontWeight.Bold)
+        Text(
+            if (BuildConfig.DEBUG) "Compilación de desarrollo: para actualizaciones sobre la versión instalada se necesita una APK firmada."
+            else "Recomp busca nuevas versiones firmadas en GitHub Releases cada vez que lo abres.",
+            color = TextMuted, fontSize = 12.sp
+        )
+        OutlinedButton(
+            onClick = onCheckUpdates,
+            enabled = !updateBusy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Refresh, null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (updateBusy) "Comprobando o descargando..." else "Buscar actualizaciones")
+        }
+        if (downloadedUpdateReady) {
+            Button(onClick = onInstallDownloaded, modifier = Modifier.fillMaxWidth()) {
+                Text("Instalar APK descargado")
+            }
+        }
+        if (updateMessage.isNotBlank()) Text(updateMessage, color = TextMuted, fontSize = 12.sp)
     }
     if (!isFirstLaunch) Panel {
         Text("Privacidad y datos", fontWeight = FontWeight.Bold)
