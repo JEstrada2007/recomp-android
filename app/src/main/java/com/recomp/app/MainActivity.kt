@@ -1,6 +1,8 @@
 package com.recomp.app
 
 import android.os.Bundle
+import android.os.SystemClock
+import androidx.compose.runtime.saveable.rememberSaveable
 import java.io.File
 import com.recomp.app.update.AvailableUpdate
 import com.recomp.app.update.UpdateManager
@@ -37,7 +39,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 
-private val NavLabels = listOf("Inicio", "Comidas", "Entrenar", "Progreso", "Ajustes")
+private val NavLabels = listOf("Inicio", "Comidas", "Actividad", "Progreso", "Ajustes")
 private val Routine = listOf(
     "Sentadillas a una silla" to "2 × 8–12",
     "Flexiones en pared o mesa" to "2 × 8–12",
@@ -57,6 +59,9 @@ class MainActivity : ComponentActivity() {
                 val weights by dao.observeWeights().collectAsState(initial = emptyList())
                 val meals by dao.observeMeals().collectAsState(initial = emptyList())
                 val workouts by dao.observeWorkouts().collectAsState(initial = emptyList())
+                val stepDays by dao.observeStepDays().collectAsState(initial = emptyList())
+                val cardioSessions by dao.observeCardioSessions().collectAsState(initial = emptyList())
+                val sensorState = rememberStepSensor(dao)
                 val profile by store.profile.collectAsState(initial = UserProfile())
                 val scope = rememberCoroutineScope()
                 var tab by remember { mutableStateOf(0) }
@@ -69,6 +74,9 @@ class MainActivity : ComponentActivity() {
                 var weightDialog by remember { mutableStateOf(false) }
                 var mealDialog by remember { mutableStateOf(false) }
                 var workoutDialog by remember { mutableStateOf(false) }
+                var cardioStartedAt by rememberSaveable { mutableLongStateOf(0L) }
+                var cardioMode by rememberSaveable { mutableStateOf("") }
+                val todayStepDay = stepDays.firstOrNull { it.date == today }
                 var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
                 var updateDialog by remember { mutableStateOf(false) }
                 var updateBusy by remember { mutableStateOf(false) }
@@ -136,7 +144,7 @@ class MainActivity : ComponentActivity() {
                                             imageVector = when (index) {
                                                 0 -> Icons.Default.Home
                                                 1 -> Icons.Default.Restaurant
-                                                2 -> Icons.Default.FitnessCenter
+                                                2 -> Icons.Default.DirectionsRun
                                                 3 -> Icons.Default.ShowChart
                                                 else -> Icons.Default.Settings
                                             },
@@ -176,6 +184,8 @@ class MainActivity : ComponentActivity() {
                             0 -> HomeScreen(
                                 profile, currentWeight, latestWaist,
                                 todaysCalories, todaysProtein, workouts,
+                                stepsToday = (todayStepDay?.sensorSteps ?: 0) + (todayStepDay?.manualSteps ?: 0),
+                                cardioToday = cardioSessions.count { it.date == today },
                                 onWeight = { weightDialog = true },
                                 onMeal = { mealDialog = true },
                                 onWorkout = { workoutDialog = true }
@@ -183,16 +193,52 @@ class MainActivity : ComponentActivity() {
                             1 -> FoodScreen(todayMeals, profile.kcalTarget, todaysCalories, todaysProtein,
                                 onAdd = { mealDialog = true },
                                 onDelete = { item -> scope.launch { dao.deleteMeal(item) } })
-                            2 -> TrainingScreen(workouts, today,
-                                onAdd = { workoutDialog = true },
-                                onDelete = { item -> scope.launch { dao.deleteWorkout(item) } })
+                            2 -> {
+                                ActivityTrackingScreen(
+                                    todaySteps = todayStepDay,
+                                    sessions = cardioSessions,
+                                    sensorState = sensorState,
+                                    activeMode = cardioMode,
+                                    startedAt = cardioStartedAt,
+                                    onStart = { mode ->
+                                        cardioMode = mode
+                                        cardioStartedAt = SystemClock.elapsedRealtime()
+                                    },
+                                    onCancel = {
+                                        cardioMode = ""
+                                        cardioStartedAt = 0L
+                                    },
+                                    onSave = { mode, duration, distance, notes ->
+                                        scope.launch {
+                                            dao.insertCardioSession(CardioSession(
+                                                date = LocalDate.now().toString(),
+                                                activity = mode, durationSeconds = duration,
+                                                distanceKm = distance, notes = notes
+                                            ))
+                                        }
+                                        cardioMode = ""
+                                        cardioStartedAt = 0L
+                                    },
+                                    onDelete = { item ->
+                                        scope.launch { dao.deleteCardioSession(item) }
+                                    },
+                                    onSetManualSteps = { amount ->
+                                        scope.launch {
+                                            dao.setManualSteps(LocalDate.now().toString(), amount)
+                                        }
+                                    }
+                                )
+                                TrainingScreen(workouts, today,
+                                    onAdd = { workoutDialog = true },
+                                    onDelete = { item -> scope.launch { dao.deleteWorkout(item) } })
+                            }
                             3 -> ProgressScreen(weights, profile.initialWeightKg, profile.goalWeightKg,
                                 onAdd = { weightDialog = true },
                                 onDelete = { item -> scope.launch { dao.deleteWeight(item) } })
                             else -> SettingsScreen(profile,
                                 onSave = { updated -> scope.launch { store.update(updated) } },
                                 onExport = {
-                                    exportSnapshot = makeJson(profile, weights, meals, workouts)
+                                    exportSnapshot = makeJson(profile, weights, meals, workouts, stepDays, cardioSessions)
                                     exporter.launch("recomp-respaldo-$today.json")
                                 },
                                 updateMessage = updateMessage,
@@ -290,6 +336,8 @@ private fun HomeScreen(
     calories: Int,
     protein: Double,
     workouts: List<WorkoutEntry>,
+    stepsToday: Int,
+    cardioToday: Int,
     onWeight: () -> Unit,
     onMeal: () -> Unit,
     onWorkout: () -> Unit
@@ -321,6 +369,10 @@ private fun HomeScreen(
         val monday = LocalDate.now().minusDays((LocalDate.now().dayOfWeek.value - 1).toLong()).toString()
         Text("${workouts.count { it.date >= monday }} entrenamientos registrados", fontSize = 16.sp)
         Text("Empieza con 2 días de fuerza; aumenta a 3 si te recuperas bien.", fontSize = 12.sp, color = TextMuted)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Metric("PASOS HOY", "$stepsToday", "Sensor y manuales", Modifier.weight(1f))
+        Metric("CAMINATAS / RUNNING", "$cardioToday", "Sesiones de hoy", Modifier.weight(1f))
     }
     Text("Acciones rápidas", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -684,7 +736,9 @@ private fun makeJson(
     p: UserProfile,
     weights: List<WeightEntry>,
     meals: List<MealEntry>,
-    workouts: List<WorkoutEntry>
+    workouts: List<WorkoutEntry>,
+    stepDays: List<StepDay>,
+    cardioSessions: List<CardioSession>
 ): String = JSONObject().apply {
     put("format", "recomp-backup-v1")
     put("exported_at", LocalDate.now().toString())
@@ -703,6 +757,20 @@ private fun makeJson(
         array.put(JSONObject().apply {
             put("date", m.date); put("name", m.name)
             put("calories", m.calories); put("protein_g", m.proteinGrams)
+        })
+    } })
+    put("step_days", JSONArray().also { array -> stepDays.forEach { d ->
+        array.put(JSONObject().apply {
+            put("date", d.date); put("sensor_steps", d.sensorSteps)
+            put("manual_steps", d.manualSteps)
+        })
+    } })
+    put("cardio_sessions", JSONArray().also { array -> cardioSessions.forEach { s ->
+        array.put(JSONObject().apply {
+            put("date", s.date); put("activity", s.activity)
+            put("duration_seconds", s.durationSeconds)
+            put("distance_km", s.distanceKm ?: JSONObject.NULL)
+            put("notes", s.notes)
         })
     } })
     put("workouts", JSONArray().also { array -> workouts.forEach { w ->
