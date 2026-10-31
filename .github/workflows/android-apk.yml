@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: apk-${{ github.workflow }}-${{ github.ref }}
@@ -49,11 +49,16 @@ jobs:
       - name: Comprobar APK generado
         run: test -s app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publicar APK como artefacto descargable
-        uses: actions/upload-artifact@v4
-        with:
-          name: recomp-debug-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
+      - name: Publicar APK en GitHub Releases
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="debug-build-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" \
+            "app/build/outputs/apk/debug/app-debug.apk#Recomp-debug.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Recomp · Compilación #${GITHUB_RUN_NUMBER}" \
+            --notes "APK Android de depuración generado automáticamente desde main. Uso de prueba; no firmado para distribución oficial. Los APK de ejecuciones diferentes pueden requerir desinstalar la versión previa." \
+            --prerelease
