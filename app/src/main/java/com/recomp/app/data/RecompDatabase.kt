@@ -135,7 +135,7 @@ abstract class RecompDatabase : RoomDatabase() {
 
     companion object {
         private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
-            override suspend fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+            override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
                 connection.execSQL("CREATE TABLE IF NOT EXISTS `step_days` (`date` TEXT NOT NULL, `sensorSteps` INTEGER NOT NULL, `manualSteps` INTEGER NOT NULL, PRIMARY KEY(`date`))")
                 connection.execSQL("CREATE TABLE IF NOT EXISTS `step_checkpoint` (`id` INTEGER NOT NULL, `date` TEXT NOT NULL, `rawCount` INTEGER NOT NULL, `elapsedRealtimeMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
                 connection.execSQL("CREATE TABLE IF NOT EXISTS `cardio_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `activity` TEXT NOT NULL, `durationSeconds` INTEGER NOT NULL, `distanceKm` REAL, `notes` TEXT NOT NULL)")
