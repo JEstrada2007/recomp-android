@@ -1,4 +1,4 @@
-name: Compilar APK Android
+name: Compilar y publicar Recomp
 
 on:
   push:
@@ -15,10 +15,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-debug:
-    name: Construir APK de prueba
+  build:
+    name: Compilar Android
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      RECOMP_KEYSTORE_BASE64: ${{ secrets.RECOMP_KEYSTORE_BASE64 }}
+      RECOMP_KEYSTORE_PASSWORD: ${{ secrets.RECOMP_KEYSTORE_PASSWORD }}
+      RECOMP_KEY_ALIAS: ${{ secrets.RECOMP_KEY_ALIAS }}
+      RECOMP_KEY_PASSWORD: ${{ secrets.RECOMP_KEY_PASSWORD }}
 
     steps:
       - name: Descargar código fuente
@@ -30,9 +35,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # El proyecto todavía no contiene gradle-wrapper.jar.
-      # Usamos una instalación explícita de Gradle; no dependemos de ./gradlew.
-      - name: Instalar Gradle 9.3.1 y activar caché
+      - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
@@ -40,25 +43,47 @@ jobs:
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Instalar plataforma Android API 37.0
+      - name: Instalar Android API 37.0
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
 
-      - name: Compilar APK de depuración
+      - name: Verificar compilación de desarrollo
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Comprobar APK generado
-        run: test -s app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Publicar APK en GitHub Releases
+      - name: Confirmar firma permanente
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          if [[ -z "$RECOMP_KEYSTORE_BASE64" || -z "$RECOMP_KEYSTORE_PASSWORD" || -z "$RECOMP_KEY_ALIAS" || -z "$RECOMP_KEY_PASSWORD" ]]; then
+            echo "::notice::Faltan los cuatro secrets RECOMP_*. Compilación de desarrollo OK; no se publica un APK incompatible en Releases."
+          fi
+
+      - name: Preparar clave de firma
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.RECOMP_KEYSTORE_BASE64 != '' && env.RECOMP_KEYSTORE_PASSWORD != '' && env.RECOMP_KEY_ALIAS != '' && env.RECOMP_KEY_PASSWORD != ''
+        run: |
+          printf '%s' "$RECOMP_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/recomp-release.jks"
+          chmod 600 "$RUNNER_TEMP/recomp-release.jks"
+          echo "RECOMP_KEYSTORE_PATH=$RUNNER_TEMP/recomp-release.jks" >> "$GITHUB_ENV"
+
+      - name: Compilar APK estable firmado
+        if: env.RECOMP_KEYSTORE_PATH != ''
+        run: |
+          gradle --no-daemon --stacktrace :app:assembleRelease \
+            -PciVersionCode="$GITHUB_RUN_NUMBER" \
+            -PciVersionName="0.2.$GITHUB_RUN_NUMBER"
+          test -s app/build/outputs/apk/release/app-release.apk
+
+      - name: Publicar actualización en Releases
+        if: env.RECOMP_KEYSTORE_PATH != '' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="debug-build-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" \
-            "app/build/outputs/apk/debug/app-debug.apk#Recomp-debug.apk" \
+          APK="app/build/outputs/apk/release/app-release.apk"
+          cp "$APK" "$RUNNER_TEMP/Recomp.apk"
+          SHA256="$(sha256sum "$RUNNER_TEMP/Recomp.apk" | awk '{print $1}')"
+          TAG="v0.2.$GITHUB_RUN_NUMBER"
+          NOTES="$(printf 'VersionCode: %s\nSHA256: %s\n\nCompilación firmada para actualizaciones desde Recomp. Instalación con confirmación de Android.' "$GITHUB_RUN_NUMBER" "$SHA256")"
+          gh release create "$TAG" "$RUNNER_TEMP/Recomp.apk" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Recomp · Compilación #${GITHUB_RUN_NUMBER}" \
-            --notes "APK Android de depuración generado automáticamente desde main. Uso de prueba; no firmado para distribución oficial. Los APK de ejecuciones diferentes pueden requerir desinstalar la versión previa." \
+            --title "Recomp 0.2.$GITHUB_RUN_NUMBER" \
+            --notes "$NOTES" \
             --prerelease
