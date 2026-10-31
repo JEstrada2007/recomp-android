@@ -88,7 +88,7 @@ object UpdateManager {
         val folder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: error("Almacenamiento externo no disponible")
         if (!folder.exists()) folder.mkdirs()
-        val final = File(folder, "recomp-update-" + update.versionCode + ".apk")
+        val targetFile = File(folder, "recomp-update-" + update.versionCode + ".apk")
         val temp = File(folder, "recomp-update-" + update.versionCode + ".part")
         temp.delete()
         val conn = (URL(update.downloadUrl).openConnection() as HttpURLConnection).apply {
@@ -128,9 +128,9 @@ object UpdateManager {
             if (!calculated.equals(update.sha256, ignoreCase = true)) {
                 error("El archivo no pasó la comprobación SHA-256")
             }
-            final.delete()
-            if (!temp.renameTo(final)) error("No se pudo guardar el APK")
-            final
+            targetFile.delete()
+            if (!temp.renameTo(targetFile)) error("No se pudo guardar el APK")
+            targetFile
         } catch (t: Throwable) {
             temp.delete()
             throw t
