@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     containerColor = Background,
                     bottomBar = {
-                        NavigationBar(containerColor = Color(0xFF1C142E)) {
+                        if (profile.isConfigured) NavigationBar(containerColor = Color(0xFF1C142E)) {
                             NavLabels.forEachIndexed { index, label ->
                                 NavigationBarItem(
                                     selected = tab == index,
@@ -122,7 +122,14 @@ class MainActivity : ComponentActivity() {
                                 Text("v0.1", modifier = Modifier.padding(10.dp), color = Color.White, fontSize = 12.sp)
                             }
                         }
-                        when (tab) {
+                        if (!profile.isConfigured) {
+                            SettingsScreen(
+                                profile,
+                                onSave = { updated -> scope.launch { store.update(updated) } },
+                                onExport = {},
+                                isFirstLaunch = true
+                            )
+                        } else when (tab) {
                             0 -> HomeScreen(
                                 profile, currentWeight, latestWaist,
                                 todaysCalories, todaysProtein, workouts,
@@ -212,11 +219,11 @@ private fun HomeScreen(
         Text("${oneDecimal(currentWeight)} kg", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
         val delta = profile.initialWeightKg - currentWeight
         Text(
-            "${if (delta >= 0) "−" else "+"}${oneDecimal(abs(delta))} kg desde el inicio  •  Meta ${oneDecimal(profile.goalWeightKg)} kg",
-            color = if (delta >= 0) Success else TextMuted, fontSize = 12.sp
+            "Cambio desde el inicio: ${oneDecimal(currentWeight - profile.initialWeightKg)} kg  •  Meta ${oneDecimal(profile.goalWeightKg)} kg",
+            color = TextMuted, fontSize = 12.sp
         )
-        val total = profile.initialWeightKg - profile.goalWeightKg
-        val fraction = if (total > 0) (delta / total).toFloat().coerceIn(0f, 1f) else 0f
+        val total = abs(profile.goalWeightKg - profile.initialWeightKg)
+        val fraction = if (total > 0) (abs(currentWeight - profile.initialWeightKg) / total).toFloat().coerceIn(0f, 1f) else 0f
         LinearProgressIndicator(
             progress = { fraction }, modifier = Modifier.fillMaxWidth().height(9.dp),
             color = Purple, trackColor = Secondary,
@@ -226,7 +233,7 @@ private fun HomeScreen(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Metric("CALORÍAS HOY", "$calories", "Meta: ${profile.kcalTarget?.toString() ?: "sin configurar"}", Modifier.weight(1f))
-        Metric("PROTEÍNA HOY", "${protein.toInt()} g", "Referencia: 140–160 g", Modifier.weight(1f))
+        Metric("PROTEÍNA HOY", "${protein.toInt()} g", "Seguimiento diario", Modifier.weight(1f))
     }
     Panel {
         Text("Esta semana", fontWeight = FontWeight.SemiBold)
@@ -267,7 +274,7 @@ private fun FoodScreen(
             Text("Objetivo orientativo: $target kcal", color = TextMuted, fontSize = 12.sp)
         } else Text("Selecciona la fórmula metabólica en Ajustes para calcular una meta orientativa.", color = TextMuted, fontSize = 12.sp)
         Text("Proteína: ${oneDecimal(protein)} g", fontWeight = FontWeight.SemiBold)
-        Text("Referencia inicial de proteína: 140–160 g/día; ajustar según tus necesidades.", color = TextMuted, fontSize = 11.sp)
+        Text("La necesidad de proteína cambia según tu peso, actividad y objetivos. No hay una meta universal.", color = TextMuted, fontSize = 11.sp)
     }
     Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Default.Add, null); Spacer(Modifier.width(7.dp)); Text("Registrar comida")
@@ -298,7 +305,7 @@ private fun TrainingScreen(
 ) {
     SectionTitle("Entrenamiento", "Mejora poco a poco; la constancia importa más que la intensidad")
     Panel {
-        Text("Rutina inicial de cuerpo completo", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Ejemplo de rutina para principiantes", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("Semanas 1–2: 2 sesiones de fuerza. Desde la semana 3: hasta 3 sesiones si te recuperas bien.", color = TextMuted, fontSize = 12.sp)
         Routine.forEach { (exercise, reps) ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -392,14 +399,20 @@ private fun WeightChart(entries: List<WeightEntry>) {
 private fun SettingsScreen(
     profile: UserProfile,
     onSave: (UserProfile) -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    isFirstLaunch: Boolean = false
 ) {
-    var age by remember(profile) { mutableStateOf(profile.age.toString()) }
-    var height by remember(profile) { mutableStateOf(profile.heightCm.toString()) }
-    var startWeight by remember(profile) { mutableStateOf(profile.initialWeightKg.toString()) }
-    var goalWeight by remember(profile) { mutableStateOf(profile.goalWeightKg.toString()) }
+    var age by remember(profile) { mutableStateOf(profile.age.takeIf { it > 0 }?.toString() ?: "") }
+    var height by remember(profile) { mutableStateOf(profile.heightCm.takeIf { it > 0 }?.toString() ?: "") }
+    var startWeight by remember(profile) { mutableStateOf(profile.initialWeightKg.takeIf { it > 0 }?.toString() ?: "") }
+    var goalWeight by remember(profile) { mutableStateOf(profile.goalWeightKg.takeIf { it > 0 }?.toString() ?: "") }
     var sex by remember(profile) { mutableStateOf(profile.formula) }
-    SectionTitle("Ajustes", "Configura los datos de tu plan")
+    var activity by remember(profile) { mutableStateOf(profile.activity) }
+    var objective by remember(profile) { mutableStateOf(profile.objective) }
+    SectionTitle(
+        if (isFirstLaunch) "Crea tu perfil" else "Ajustes",
+        if (isFirstLaunch) "Personaliza Recomp antes de empezar. No usamos datos de ejemplo." else "Configura los datos de tu plan"
+    )
     Panel {
         Text("Perfil y objetivo", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         NumberInput("Edad (años)", age, { age = it }, false)
@@ -411,36 +424,55 @@ private fun SettingsScreen(
             FilterChip(selected = sex == "masculina", onClick = { sex = "masculina" }, label = { Text("Masculina", fontSize = 12.sp) })
             FilterChip(selected = sex == "femenina", onClick = { sex = "femenina" }, label = { Text("Femenina", fontSize = 12.sp) })
         }
-        Text("Esta elección se usa solo para la estimación energética. Puedes dejarla pendiente.", color = TextMuted, fontSize = 11.sp)
+        Text("Selecciona la variante de la ecuación de gasto energético; no describe tu identidad de género.", color = TextMuted, fontSize = 11.sp)
+        Text("Nivel de actividad habitual", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = activity == "sedentaria", onClick = { activity = "sedentaria" }, label = { Text("Sedentaria") })
+            FilterChip(selected = activity == "ligera", onClick = { activity = "ligera" }, label = { Text("Ligera") })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = activity == "moderada", onClick = { activity = "moderada" }, label = { Text("Moderada") })
+            FilterChip(selected = activity == "intensa", onClick = { activity = "intensa" }, label = { Text("Intensa") })
+        }
+        Text("Objetivo personal", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = objective == "perder_grasa", onClick = { objective = "perder_grasa" }, label = { Text("Perder grasa") })
+            FilterChip(selected = objective == "recomposicion", onClick = { objective = "recomposicion" }, label = { Text("Recomposición") })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = objective == "mantener", onClick = { objective = "mantener" }, label = { Text("Mantener") })
+            FilterChip(selected = objective == "ganar_musculo", onClick = { objective = "ganar_musculo" }, label = { Text("Ganar músculo") })
+        }
         val updated = profile.copy(
             age = age.toIntOrNull() ?: profile.age,
             heightCm = height.toIntOrNull() ?: profile.heightCm,
             initialWeightKg = startWeight.parseDecimal() ?: profile.initialWeightKg,
             goalWeightKg = goalWeight.parseDecimal() ?: profile.goalWeightKg,
-            formula = sex
+            formula = sex,
+            activity = activity,
+            objective = objective
         )
         val parsedAge = age.toIntOrNull()
         val parsedHeight = height.toIntOrNull()
         val valid = parsedAge != null && parsedAge in 18..100 &&
             parsedHeight != null && parsedHeight in 100..240 &&
             (startWeight.parseDecimal() ?: 0.0) in 30.0..400.0 &&
-            (goalWeight.parseDecimal() ?: 0.0) in 30.0..400.0
+            (goalWeight.parseDecimal() ?: 0.0) in 30.0..400.0 &&
+            sex in listOf("masculina", "femenina") && activity.isNotBlank() && objective.isNotBlank()
         Button(onClick = { onSave(updated) }, enabled = valid, modifier = Modifier.fillMaxWidth()) {
-            Text("Guardar ajustes")
+            Text(if (isFirstLaunch) "Comenzar" else "Guardar ajustes")
         }
     }
     Panel {
         Text("Gasto energético estimado", fontWeight = FontWeight.Bold)
-        val target = profile.copy(formula = sex, age = age.toIntOrNull() ?: profile.age,
-            heightCm = height.toIntOrNull() ?: profile.heightCm,
-            initialWeightKg = startWeight.parseDecimal() ?: profile.initialWeightKg).kcalTarget
+        val target = updated.kcalTarget
         if (target == null) Text("Escoge una fórmula para ver un cálculo aproximado.", color = TextMuted)
         else {
             Text("$target kcal/día", color = Purple, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-            Text("Actividad sedentaria (×1,2), déficit moderado de ${profile.deficitKcal} kcal. No se ajusta automáticamente.", fontSize = 12.sp, color = TextMuted)
+            Text("Estimación según actividad y objetivo elegido; no es una prescripción. No se ajusta automáticamente.", fontSize = 12.sp, color = TextMuted)
         }
     }
-    Panel {
+    if (!isFirstLaunch) Panel {
         Text("Privacidad y datos", fontWeight = FontWeight.Bold)
         Text("Los registros se guardan únicamente en este teléfono. La app no solicita internet ni crea una cuenta.", color = TextMuted, fontSize = 12.sp)
         OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth()) {
@@ -550,7 +582,7 @@ private fun makeJson(
     put("profile", JSONObject().apply {
         put("age", p.age); put("height_cm", p.heightCm)
         put("starting_weight_kg", p.initialWeightKg); put("goal_weight_kg", p.goalWeightKg)
-        put("formula", p.formula); put("deficit_kcal", p.deficitKcal)
+        put("formula", p.formula); put("activity", p.activity); put("objective", p.objective); put("deficit_kcal", p.deficitKcal)
     })
     put("weights", JSONArray().also { array -> weights.forEach { w ->
         array.put(JSONObject().apply {
