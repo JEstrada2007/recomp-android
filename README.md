@@ -1,6 +1,8 @@
 # Recomp — App Android (Kotlin / Jetpack Compose)
 
-Aplicación **offline-first** para registrar cambios corporales, comidas y entrenamiento durante la recomposición corporal.
+Aplicación **offline-first** de seguimiento de alimentación, entrenamiento y progreso físico **para el público adulto en general**. Permite elegir entre pérdida de grasa, recomposición, mantenimiento o ganancia muscular.
+
+No utiliza el peso, la edad ni los objetivos del desarrollador como valores iniciales. Cada usuario completa su perfil en el primer inicio.
 
 > **Estado:** base inicial `v0.1.0`, código fuente aún sin compilación verificada en Android Studio. No incluye APK precompilado.
 
@@ -9,8 +11,9 @@ Aplicación **offline-first** para registrar cambios corporales, comidas y entre
 - Pantallas **Inicio**, **Comidas**, **Entrenar**, **Progreso** y **Ajustes**.
 - Registro y eliminación de pesos, cintura, comidas, proteínas y entrenamientos mediante **Room** (SQLite), con almacenamiento local.
 - Gráfica básica del historial de peso.
+- **Configuración inicial obligatoria**: edad, estatura, peso inicial, meta de peso, nivel de actividad, objetivo personal y variante de ecuación metabólica.
 - Perfil y preferencias con **DataStore**.
-- Cálculo de referencia energética por Mifflin–St Jeor, sedentario, configurable: **no fija un objetivo calórico hasta elegir la fórmula**.
+- Cálculo energético orientativo mediante Mifflin–St Jeor y factor de actividad: **no muestra una meta hasta completar el perfil**.
 - Exportación manual a JSON (importación pendiente).
 - Tema oscuro morado; sin cuentas, anuncios, internet ni analíticas.
 
@@ -37,7 +40,7 @@ app/src/main/java/com/recomp/app/
 
 ## Seguridad y privacidad
 
-Los datos permanecen en tu dispositivo salvo que exportes un respaldo manualmente. **Este repositorio es público**: los valores predeterminados son ficticios y deben configurarse dentro de la app. No añadas a GitHub bases `.db`, respaldos `.json` con datos reales, contraseñas, claves ni otros registros personales.
+Los datos permanecen en tu dispositivo salvo que exportes un respaldo manualmente. **Este repositorio es público**: no contiene un perfil personal preconfigurado; cada usuario registra sus propios datos. No añadas a GitHub bases `.db`, respaldos `.json` con datos reales, contraseñas, claves ni otros registros personales.
 
 ## Subir a GitHub
 
@@ -58,6 +61,8 @@ La licencia y publicación pública quedan a elección del propietario.
 ## Pendiente
 
 - Comprobar sincronización y compilación en Android Studio.
+- Revisar accesibilidad, traducciones, objetivos distintos al peso y coherencia de las estimaciones.
+- Diseñar una experiencia específica para menores de edad antes de ampliar el público objetivo más allá de adultos.
 - Añadir pruebas automatizadas y manejo explícito de errores al exportar.
 - Importación de respaldos, edición de registros y migraciones de base de datos.
 - Entrenamientos por series/repeticiones, seguimiento semanal y recordatorios locales.
