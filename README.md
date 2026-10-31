@@ -66,7 +66,11 @@ Si falta cualquiera de los secrets, **no se publica una APK sin firma estable**.
 
 - Configuración inicial por usuario: edad, estatura, peso, actividad, objetivo y variante de fórmula metabólica.
 - Registro de comidas, calorías, proteínas, entrenamiento, peso y cintura en almacenamiento local.
-- Gráfica básica de evolución y exportación JSON.
+- **Actividad (caminata y running):** cronómetro de sesiones mientras la app está abierta; registro manual de duración, distancia opcional y notas; historial semanal y eliminación de sesiones.
+- **Pasos diarios:** sensor `TYPE_STEP_COUNTER` cuando existe y se autoriza el permiso de actividad física; total editable de pasos manuales guardado separadamente de los detectados.
+- Los pasos medidos no se duplican al registrar sesiones. El primer dato del sensor establece una referencia; **no recupera pasos anteriores ni realiza seguimiento continuo con la app cerrada**.
+- Migración de Room `1 → 2` para conservar las comidas, pesos y entrenamientos guardados en instalaciones anteriores.
+- Gráfica básica de evolución y exportación JSON, ahora con pasos y sesiones de cardio.
 - Estimación energética orientativa para objetivos de pérdida de grasa, recomposición, mantenimiento y ganancia muscular.
 - Tema oscuro morado, sin cuentas obligatorias y sin análisis externos.
 - Comprobación de actualizaciones desde GitHub Releases.
