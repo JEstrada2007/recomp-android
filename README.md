@@ -1,70 +1,70 @@
-# Recomp — App Android (Kotlin / Jetpack Compose)
+# Recomp · Android
 
-Aplicación **offline-first** de seguimiento de alimentación, entrenamiento y progreso físico **para el público adulto en general**. Permite elegir entre pérdida de grasa, recomposición, mantenimiento o ganancia muscular.
+Aplicación Android **offline-first** para registrar alimentación, entrenamientos y cambios corporales. Orientada al **público adulto en general**, no a un perfil personal predefinido. Construida con **Kotlin**, **Jetpack Compose**, **Room** y **DataStore**.
 
-No utiliza el peso, la edad ni los objetivos del desarrollador como valores iniciales. Cada usuario completa su perfil en el primer inicio.
+> **Estado:** prototipo v0.1.0 en desarrollo. Las compilaciones automatizadas publican APK de **depuración** como versiones preliminares (*pre-releases*), no APK oficiales de producción.
 
-> **Estado:** base inicial `v0.1.0`, código fuente aún sin compilación verificada en Android Studio. No incluye APK precompilado.
+## 📲 Descargar la aplicación
 
-## Funciones
+**[Ir a GitHub Releases](https://github.com/JEstrada2007/recomp-android/releases)**
 
-- Pantallas **Inicio**, **Comidas**, **Entrenar**, **Progreso** y **Ajustes**.
-- Registro y eliminación de pesos, cintura, comidas, proteínas y entrenamientos mediante **Room** (SQLite), con almacenamiento local.
-- Gráfica básica del historial de peso.
-- **Configuración inicial obligatoria**: edad, estatura, peso inicial, meta de peso, nivel de actividad, objetivo personal y variante de ecuación metabólica.
-- Perfil y preferencias con **DataStore**.
-- Cálculo energético orientativo mediante Mifflin–St Jeor y factor de actividad: **no muestra una meta hasta completar el perfil**.
-- Exportación manual a JSON (importación pendiente).
-- Tema oscuro morado; sin cuentas, anuncios, internet ni analíticas.
+1. Abre la versión preliminar más reciente que tenga el archivo adjunto.
+2. En **Assets**, descarga **`Recomp-debug.apk`**.
+3. Instálalo en Android 8.0 (API 26) o superior, habilitando la instalación desde esa fuente si tu teléfono lo solicita.
 
-## Cómo abrirlo
+**Importante:** las compilaciones debug de distintas ejecuciones pueden usar firmas diferentes. Puede ser necesario desinstalar una versión anterior para instalar la siguiente, lo que **borra los datos locales**. La importación de respaldos todavía no está implementada. No uses estas compilaciones para datos que no puedas permitirte perder.
 
-1. Abre **Android Studio** reciente con soporte para **AGP 9.0** y JDK 17.
-2. Selecciona **Open** y elige la carpeta raíz del proyecto (donde está `settings.gradle.kts`).
-3. Sincroniza Gradle. El proyecto define Gradle **9.2.1**, AGP **9.0.1**, Compose BOM **2026.09.00**, Kotlin Compose **2.3.21**, Room **2.8.5** y KSP **2.3.10**.
-4. Si Android Studio no encuentra el wrapper, usa un Gradle 9.2.1 instalado localmente para ejecutar `gradle wrapper --gradle-version 9.2.1`, o copia el wrapper estándar desde un proyecto Android Studio compatible. **El archivo binario `gradle-wrapper.jar` no está incluido** en esta entrega.
-5. Instala Android SDK API **37** si te lo pide y compila `:app:assembleDebug`.
-6. Ejecuta en un emulador o teléfono Android 8.0 (API 26) o superior.
+Si aún no aparece ningún APK en Releases, consulta [el estado del compilador](https://github.com/JEstrada2007/recomp-android/actions/workflows/android-apk.yml). **No se publica ninguna versión cuando la compilación falla**.
 
-## Estructura
+## ⚙️ Compilación automática
+
+El archivo [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml) ejecuta GitHub Actions:
+
+- **Push a `main`**: compila y, si termina correctamente, crea una versión preliminar con etiqueta `debug-build-N` y adjunta `Recomp-debug.apk` en **Releases**.
+- **Pull request hacia `main`**: verifica la compilación, pero **no publica una versión**.
+- **Ejecución manual**: abre [Actions → Compilar APK Android](https://github.com/JEstrada2007/recomp-android/actions/workflows/android-apk.yml), elige **Run workflow** sobre `main`.
+
+El proceso usa **Java 17**, **Gradle 9.3.1**, **AGP 9.1.1** y **Android SDK API 37.0**. El APK se genera con `gradle --no-daemon --stacktrace :app:assembleDebug`. GitHub Actions usa el `GITHUB_TOKEN` del repositorio para publicar en Releases, sin que tengas que añadir un token manual.
+
+## Funciones actuales
+
+- Pantallas de **Inicio**, **Comidas**, **Entrenar**, **Progreso** y **Ajustes**.
+- Configuración inicial individual: edad, estatura, peso inicial, meta de peso, actividad, objetivo y variante de ecuación metabólica.
+- Objetivos: perder grasa, recomposición corporal, mantenimiento o ganar músculo.
+- Registro local de peso, cintura, alimentos, calorías, proteínas y entrenamientos.
+- Gráfica sencilla de peso y exportación manual de registros a JSON.
+- Estimación energética orientativa por Mifflin–St Jeor y nivel de actividad; no equivale a una prescripción médica.
+- Tema oscuro morado, sin cuentas, anuncios ni acceso obligatorio a internet.
+
+## Desarrollo local
+
+1. Clona el repositorio: `git clone https://github.com/JEstrada2007/recomp-android.git`.
+2. Ábrelo en Android Studio compatible con **AGP 9.1.1** y **JDK 17**.
+3. Configura **Gradle 9.3.1** y **Android SDK API 37.0**.
+4. Ejecuta `gradle :app:assembleDebug`. El APK estará en `app/build/outputs/apk/debug/app-debug.apk`.
+
+> Actualmente falta incluir el binario `gradle-wrapper.jar` en el repositorio, por lo que no se debe asumir que `./gradlew` funcione. GitHub Actions instala Gradle explícitamente.
+
+### Estructura
 
 ```text
 app/src/main/java/com/recomp/app/
-  MainActivity.kt        # Pantallas Compose y formularios
+  MainActivity.kt        # Pantallas y formularios Compose
   data/
-    RecompDatabase.kt    # Entidades y DAO Room
-    ProfileStore.kt      # Preferencias y estimación energética
+    RecompDatabase.kt    # Persistencia Room
+    ProfileStore.kt      # Preferencias de usuario y estimaciones
   ui/
-    RecompTheme.kt       # Tema oscuro
+    RecompTheme.kt       # Tema visual
+.github/workflows/
+  android-apk.yml        # Compilación y publicación automática
 ```
 
-## Seguridad y privacidad
+## Privacidad y limitaciones
 
-Los datos permanecen en tu dispositivo salvo que exportes un respaldo manualmente. **Este repositorio es público**: no contiene un perfil personal preconfigurado; cada usuario registra sus propios datos. No añadas a GitHub bases `.db`, respaldos `.json` con datos reales, contraseñas, claves ni otros registros personales.
+Los registros se guardan en el dispositivo, salvo exportación manual. Este repositorio es **público**, pero **no contiene un perfil personal precargado**. No subas bases de datos, respaldos con datos reales o claves privadas.
 
-## Subir a GitHub
+El software es experimental y está orientado actualmente a adultos. No reemplaza la atención profesional de salud; sus cálculos son aproximaciones generales.
 
-1. Utiliza tu repositorio GitHub para seguir el desarrollo; considera hacerlo privado si añades datos personales.
-2. Desde la carpeta del proyecto:
+**Pendiente:** verificar pruebas funcionales, implementar importación de respaldos, mejorar accesibilidad, personalizar entrenamientos, preparar firma estable para actualizaciones y añadir pruebas automatizadas.
 
-```sh
-git init
-git add .
-git commit -m "feat: estructura inicial de Recomp Android"
-git branch -M main
-git remote add origin https://github.com/JEstrada2007/recomp-android.git
-git push -u origin main
-```
-
-La licencia y publicación pública quedan a elección del propietario.
-
-## Pendiente
-
-- Comprobar sincronización y compilación en Android Studio.
-- Revisar accesibilidad, traducciones, objetivos distintos al peso y coherencia de las estimaciones.
-- Diseñar una experiencia específica para menores de edad antes de ampliar el público objetivo más allá de adultos.
-- Añadir pruebas automatizadas y manejo explícito de errores al exportar.
-- Importación de respaldos, edición de registros y migraciones de base de datos.
-- Entrenamientos por series/repeticiones, seguimiento semanal y recordatorios locales.
-
-**Aviso:** la app ofrece herramientas de seguimiento, no un diagnóstico ni recomendaciones médicas individualizadas.
+La elección de licencia y una eventual publicación de producción quedan pendientes.
