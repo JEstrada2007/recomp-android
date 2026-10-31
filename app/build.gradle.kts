@@ -15,19 +15,31 @@ android {
         applicationId = "com.recomp.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("ciVersionCode").orNull?.toIntOrNull() ?: 2
+        versionName = providers.gradleProperty("ciVersionName").orNull ?: "0.2.0-dev"
+    }
+    signingConfigs {
+        create("recompRelease") {
+            val signingPath = System.getenv("RECOMP_KEYSTORE_PATH")
+            if (!signingPath.isNullOrBlank()) {
+                storeFile = file(signingPath)
+                storePassword = System.getenv("RECOMP_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RECOMP_KEY_ALIAS")
+                keyPassword = System.getenv("RECOMP_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("recompRelease")
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 kotlin { jvmToolchain(17) }
